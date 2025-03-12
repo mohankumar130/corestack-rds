@@ -1,10 +1,12 @@
 # Fetch current RDS state before making changes
 data "external" "rds_status" {
   program = ["python3", "get_rds_status.py", var.aws_region, var.rds_instance_id]
+  depends_on = [ null_resource.stop_rds ]
 }
 
 output "rds_current_state" {
   value = data.external.rds_status.result["current_state"]
+  depends_on = [ data.external.rds_new_status ]
 }
 
 # Stop RDS if it's running
