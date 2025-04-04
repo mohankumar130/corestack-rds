@@ -1,7 +1,9 @@
 variable "aws_region" {
-  default = "ap-south-1"
+  description = "AWS region where the RDS instance is located"
+  type        = string
 }
 
 variable "rds_instance_name" {
-  default = "demo-db-test"
+  description = "RDS instance identifier"
+  type        = string
 }
