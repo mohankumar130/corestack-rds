@@ -1,42 +1,30 @@
-# Fetch current RDS state before making changes
-data "external" "rds_status" {
-  program = ["python3", "get_rds_status.py", var.aws_region, var.rds_instance_id]
-  depends_on = [ null_resource.stop_rds ]
-}
-
-output "rds_current_state" {
-  value = data.external.rds_status.result["current_state"]
-  depends_on = [ data.external.rds_new_status ]
-}
-
-# Stop RDS if it's running
-resource "null_resource" "stop_rds" {
-  count = data.external.rds_status.result["current_state"] == "available" ? 1 : 0
+resource "null_resource" "stop_rds_instance" {
+  triggers = {
+    always_run = timestamp()
+  }
 
   provisioner "local-exec" {
     interpreter = ["bash", "-c"]
-    command = <<EOT
-      #!/bin/bash
-      curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-      python3 get-pip.py
-      python3 -m pip install boto3
+    command = <<-EOF
+    #!/bin/bash
+    curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+    python3 get-pip.py
+    python3 -m pip install boto3
 
-      # Run script in background and detach (immediate Terraform completion)
-      nohup python3 stop_rds.py ${var.aws_region} ${var.rds_instance_id}
-    EOT
-  }
+    # Run Python script to stop RDS
+    python3 stop_rds.py ${var.rds_instance_name} ${var.aws_region}
 
-  triggers = {
-    always_run = "${uuid()}"
+    # Save the status file for Terraform
+    cp rds_status.txt terraform_rds_status.txt
+    EOF
   }
 }
 
-# Fetch new RDS state after stopping
-data "external" "rds_new_status" {
-  depends_on = [null_resource.stop_rds]
-  program = ["python3", "get_rds_status.py", var.aws_region, var.rds_instance_id]
+resource "local_file" "rds_status" {
+  content  = file("terraform_rds_status.txt")
+  filename = "${path.module}/terraform_rds_status.txt"
 }
 
-output "rds_new_state" {
-  value = data.external.rds_new_status.result["current_state"]
+output "rds_stop_status" {
+  value = local_file.rds_status.content
 }
